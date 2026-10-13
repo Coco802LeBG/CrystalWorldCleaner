@@ -9,7 +9,9 @@ import org.bukkit.entity.Item;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.ItemSpawnEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -23,90 +25,13 @@ public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
     private final Queue<Chunk> queue = new ArrayDeque<>();
     private final Set<String> queued = new HashSet<>();
 
-    private static final int MAP_SIZE = 7000;
-    private static final int CENTER_X = 0;
-    private static final int CENTER_Z = 0;
-    private static final int CHUNKS_PER_TICK = 1;
-
-    private int preloadX;
-    private int preloadZ;
-    private int minChunk;
-    private int maxChunk;
-    private boolean preloadFinished;
+    private long lastInteractionLog = 0L;
+    private long interactions = 0L;
 
     @Override
     public void onEnable() {
         getServer().getPluginManager().registerEvents(this, this);
 
-        World world = Bukkit.getWorld("world");
-
-        if (world != null) {
-            startPreload(world);
-        } else {
-            getLogger().warning(
-                    "Le monde 'world' est introuvable. Preload non demarre."
-            );
-        }
-
-        startCleaner();
-        getLogger().info("CrystalWorldCleaner active.");
-    }
-
-    private void startPreload(World world) {
-        int radius = MAP_SIZE / 2;
-
-        minChunk = (CENTER_X - radius) >> 4;
-        maxChunk = (CENTER_X + radius) >> 4;
-
-        int minZ = (CENTER_Z - radius) >> 4;
-        int maxZ = (CENTER_Z + radius) >> 4;
-
-        preloadX = minChunk;
-        preloadZ = minZ;
-        preloadFinished = false;
-
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (preloadFinished) {
-                    cancel();
-                    return;
-                }
-
-                int chunksThisTick = 0;
-
-                while (chunksThisTick < CHUNKS_PER_TICK) {
-                    world.getChunkAt(preloadX, preloadZ);
-
-                    preloadZ++;
-
-                    if (preloadZ > maxZ) {
-                        preloadZ = minZ;
-                        preloadX++;
-                    }
-
-                    chunksThisTick++;
-
-                    if (preloadX > maxChunk) {
-                        preloadFinished = true;
-                        getLogger().info(
-                                "Preload des chunks termine pour le monde "
-                                        + world.getName()
-                        );
-                        cancel();
-                        return;
-                    }
-                }
-            }
-        }.runTaskTimer(this, 1L, 1L);
-
-        getLogger().info(
-                "Preload commence pour une zone d'environ "
-                        + MAP_SIZE + " x " + MAP_SIZE + " blocs."
-        );
-    }
-
-    private void startCleaner() {
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -118,14 +43,13 @@ public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
 
                 queued.remove(key(chunk));
 
-                World world = chunk.getWorld();
-
-                if (world.getEnvironment() != World.Environment.NORMAL) {
+                if (chunk.getWorld().getEnvironment()
+                        != World.Environment.NORMAL) {
                     return;
                 }
 
                 new BukkitRunnable() {
-                    private int y = world.getMinHeight();
+                    private int y = chunk.getWorld().getMinHeight();
 
                     @Override
                     public void run() {
@@ -134,7 +58,8 @@ public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
                             return;
                         }
 
-                        int endY = Math.min(y + 8, world.getMaxHeight());
+                        int maxY = chunk.getWorld().getMaxHeight();
+                        int endY = Math.min(y + 8, maxY);
 
                         for (int x = 0; x < 16; x++) {
                             for (int z = 0; z < 16; z++) {
@@ -157,13 +82,15 @@ public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
 
                         y = endY;
 
-                        if (y >= world.getMaxHeight()) {
+                        if (y >= maxY) {
                             cancel();
                         }
                     }
                 }.runTaskTimer(CrystalWorldCleaner.this, 1L, 1L);
             }
         }.runTaskTimer(this, 1L, 1L);
+
+        getLogger().info("CrystalWorldCleaner active.");
     }
 
     @EventHandler
@@ -190,6 +117,34 @@ public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
                 item.remove();
             }
         }, 20L);
+    }
+
+    @EventHandler
+    public void onCrystalPvPInteract(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+
+        Material item = event.getMaterial();
+
+        if (item != Material.GLOWSTONE
+                && item != Material.RESPAWN_ANCHOR) {
+            return;
+        }
+
+        interactions++;
+
+        long now = System.currentTimeMillis();
+
+        if (now - lastInteractionLog >= 10000L) {
+            getLogger().fine(
+                    "Interactions anchor/glowstone sur 10 secondes : "
+                            + interactions
+            );
+
+            interactions = 0L;
+            lastInteractionLog = now;
+        }
     }
 
     private String key(Chunk chunk) {
@@ -231,7 +186,6 @@ public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
                 || name.equals("SEAGRASS")
                 || name.equals("TALL_SEAGRASS")
                 || name.equals("LILY_PAD")
-                || name.equals("LILY_OF_THE_VALLEY")
                 || name.equals("PINK_PETALS")
                 || name.equals("SPORE_BLOSSOM")
                 || name.equals("TORCHFLOWER")
