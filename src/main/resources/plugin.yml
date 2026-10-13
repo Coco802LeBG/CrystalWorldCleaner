@@ -1,0 +1,5 @@
+﻿name: CrystalWorldCleaner
+version: 1.0.0
+main: ca.crystal.cleaner.CrystalWorldCleaner
+api-version: '1.21'
+description: Removes vegetation, liquids and cave air from loaded overworld chunks.
