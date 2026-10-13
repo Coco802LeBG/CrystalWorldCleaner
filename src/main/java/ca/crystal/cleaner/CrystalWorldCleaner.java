@@ -1,58 +1,33 @@
-
 package ca.crystal.cleaner;
 
 import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.entity.Item;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.ItemSpawnEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class CrystalWorldCleaner extends JavaPlugin implements Listener {
+public class CrystalWorldCleaner extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        getServer().getPluginManager().registerEvents(this, this);
-        getLogger().info("CrystalWorldCleaner enabled.");
+        Bukkit.getPluginManager().registerEvents(this, this);
     }
 
-    /*
-     * ITEM DROP CLEANER
-     * Removes dropped items after approximately 1 second.
-     */
-    @EventHandler
-    public void onItemSpawn(ItemSpawnEvent event) {
-        Item item = event.getEntity();
-
-        Bukkit.getScheduler().runTaskLater(this, () -> {
-            if (item.isValid() && !item.isDead()) {
-                item.remove();
-            }
-        }, 20L);
-    }
-
-    /*
-     * ANCHOR / GLOWSTONE INTERACTION OPTIMIZER
-     * Keeps vanilla interactions intact.
-     * Does not cancel events or change game mechanics.
-     */
-    @EventHandler
-    public void onAnchorInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) {
-            return;
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onPlayerRespawn(PlayerRespawnEvent event) {
+        // Détecte si le joueur tente de réapparaître sur une Respawn Anchor
+        if (event.isAnchorSpawn()) {
+            Player player = event.getPlayer();
+            
+            // Récupère le point de spawn principal du monde par défaut
+            Location mainSpawn = Bukkit.getWorlds().get(0).getSpawnLocation();
+            
+            // Force la réapparition au spawn du serveur au lieu de l'ancre
+            event.setRespawnLocation(mainSpawn);
+            player.sendMessage("§cLes ancres de réapparition sont désactivées !");
         }
-
-        Material material = event.getMaterial();
-
-        if (material != Material.RESPAWN_ANCHOR
-                && material != Material.GLOWSTONE) {
-            return;
-        }
-
-        // Intentionally no delay, event cancellation, or extra task.
-        // Vanilla handles the interaction normally.
     }
 }
