@@ -20,6 +20,18 @@ jobs:
           java-version: '21'
           cache: maven
 
+      - name: Remove BOM from Java files
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          for p in Path("src/main/java").rglob("*.java"):
+              data = p.read_bytes()
+              if data.startswith(b"\xef\xbb\xbf"):
+                  p.write_bytes(data[3:])
+                  print(f"BOM removed: {p}")
+          PY
+
       - name: Compile plugin
         run: mvn --batch-mode clean package
 
